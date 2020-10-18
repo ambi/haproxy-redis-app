@@ -8,6 +8,7 @@ gem 'puma', '~> 4.1'
 gem 'sass-rails', '>= 6'
 gem 'jbuilder', '~> 2.7'
 gem 'redis'
+gem 'mysql2'
 
 gem 'bootsnap', '>= 1.4.2', require: false
 

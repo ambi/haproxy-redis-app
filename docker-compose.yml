@@ -1,6 +1,11 @@
 version: '3'
 services:
   haproxy:
+    depends_on:
+      - mysql1
+      - mysql2
+      - redis1
+      - redis2
     image: haproxy
     volumes:
       - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg
@@ -13,9 +18,32 @@ services:
     image: redis
     ports:
       - '6380:6379'
+  mysql1:
+    command: --default-authentication-plugin=mysql_native_password
+    image: mysql
+    ports:
+      - '3306:3306'
+    volumes:
+      - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+      - ./master.cnf:/etc/mysql/conf.d/my.cnf
+    environment:
+      MYSQL_ROOT_PASSWORD: pwd
+  mysql2:
+    depends_on:
+      - mysql1
+    environment:
+      MYSQL_ROOT_PASSWORD: pwd
+    image: mysql
+    ports:
+      - '3307:3306'
+    volumes:
+      - ./slave.cnf:/etc/mysql/conf.d/my.cnf
+      - ./start-slave.sh:/docker-entrypoint-initdb.d/start-slave.sh
   app:
     build: .
     environment:
+      MYSQL_HOST: haproxy
+      MYSQL_PASSWORD: pwd
       REDIS_HOST: haproxy
     ports:
       - "3000:3000"
