@@ -5,26 +5,45 @@
 ``` shell
 % docker-compose up -d
 
-% curl "http://localhost:3000/update"
-{"app":"2020-10-17 17:17:46 +0000"}
+% docker-compose exec redis1 redis-cli info replication | grep role
+role:master
+% docker-compose exec redis2 redis-cli info replication | grep role
+role:slave
 
-# redis1 -> redis2
+% curl "http://localhost:3000/update"
+{"redis":"2020-10-19 15:44:32 +0000"}
+
+# Stop redis1 (master).
 % docker-compose stop redis1
-Stopping haproxy-redis-app_redis1_1 ... done
-% docker-compose exec redis2 redis-cli slaveof no one
-OK
+
+# Check that redis2 becomes the new master.
+% docker-compose exec redis2 redis-cli info replication | grep role
+role:master
 
 % curl "http://localhost:3000/update"
-{"app":"2020-10-17 17:18:56 +0000"}
+{"redis":"2020-10-19 15:44:50 +0000"}
 
-# redis2 -> redis1
+# Start redis1.
 % docker-compose start redis1
-Starting redis1 ... done
-% docker-compose exec redis2 redis-cli slaveof redis1 6379
-OK
+
+# Check that redis1 become the slave.
+% docker-compose exec redis1 redis-cli info replication | grep role
+role:slave
+% docker-compose exec redis2 redis-cli info replication | grep role
+role:master
 
 % curl "http://localhost:3000/update"
-{"app":"2020-10-17 17:19:33 +0000"}
+{"redis":"2020-10-19 15:45:27 +0000"}
+
+# Stop redis2 (master).
+% docker-compose stop redis2
+
+# Check that redis1 become the new master.
+% docker-compose exec redis1 redis-cli info replication | grep role
+role:master
+
+% curl "http://localhost:3000/update"
+{"redis":"2020-10-19 15:45:51 +0000"}
 ```
 
 There are several important points in HAProxy configuration:
@@ -38,10 +57,9 @@ backend redis_backend
   tcp-check expect string role:master
   tcp-check send QUIT\r\n
   tcp-check expect string +OK
-  server redis1 redis1:6379 check inter 1s on-marked-up shutdown-backup-sessions
-  server redis2 redis2:6379 check inter 1s backup
+  server redis1 redis1:6379 check inter 4s on-marked-down shutdown-sessions
+  server redis2 redis2:6379 check inter 4s on-marked-down shutdown-sessions
 ```
 
 - We should check that the role of a Redis server is master.
-- We should add "on-marked-up shutdown-backup-sessions" in the primary Redis server (when some backup servers exist).
-  - See: https://stackoverflow.com/questions/17006135/haproxy-close-connections-to-backup-hosts-when-primary-comes-back
+- We should add "on-marked-down shutdown-sessions". (However, the failover was successful without this option. Why...?)
